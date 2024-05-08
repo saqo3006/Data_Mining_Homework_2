@@ -1,0 +1,254 @@
+
+---
+title: "Sargis Petrosyan"
+output:
+  html_document: default
+  pdf_document: default
+date: "2024-05-08"
+---
+
+```{r, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+```{r include=FALSE}
+options(repos = c(CRAN = "https://cran.r-project.org"))
+install.packages("tidyverse")
+library(tidyverse)
+install.packages(c("MASS", "AER", "ggcorrplot", "dplyr", "tidyr"))
+library(MASS)
+library(AER)
+library(ggcorrplot)
+library(dplyr)
+library(tidyr)
+options(dplyr.summarise.inform = FALSE)
+```
+
+# Task 1 (40 points): Poisson Regression:
+##### a. Data Cleaning and Description Load the awards.csv file. Get rid of variables that are irrelevant for Poisson regression analysis using function select(). Pay attention to the last column of your data. Use the separate() function to solve the problem based on data description.
+
+##### b. Check whether the data types are correct, if not, make appropriate corrections, assigning labels to each level according to the data description. Show the structure of the final data.
+
+##### c. Find your dependent variable for Poisson regression analysis. Plot the histogram of your target variable. Calculate the unconditional mean and variance of your target variable. What can you notice?
+
+##### d. Find the categorical variables which affect your target variable using boxplots. Comment on it.
+
+##### e. Use group_by() and summarise() functions to conclude about conditional variances and the means of your target variable grouped by categorical variables. Comment on it: do you have the problem of overdispersion?
+
+# Solution 1
+#### Load the data
+
+```{r}
+awards <- read.csv("C:/Users/S145/Desktop/2-nd term/Data Mining/Homework/Homework_2/awards.csv")
+head(awards)
+```
+
+#### Clean the data: remove irrelevant column and separate 'school.prog'
+```{r, echo=FALSE}
+awards <- awards %>%
+separate("school.prog", into = c("school", "prog"), sep = "/")
+awards$X<-NULL
+head(awards)
+```
+
+#### Convert numeric columns to integers or numerics as appropriate
+```{r, echo=FALSE}
+str(awards)
+awards$id_num <- as.integer(awards$id_num)
+awards$math <- as.numeric(awards$math)
+awards$physics <- as.numeric(awards$physics)
+awards$hpw <- as.numeric(awards$hpw)
+str(awards)
+```
+
+#### Convert categorical data to factors with labels
+```{r, echo=FALSE}
+awards$date <- as.Date(awards$date, format="%m/%d/%Y")
+awards$gender <- factor(awards$gender, labels = c(0, 1), levels = c("male", "female"))
+awards$school <- factor(awards$school, labels = c(0, 1), levels = c("Public", "Private"))
+awards$prog <- factor(awards$prog, levels = c("0", "1", "2", "3"), labels = c(0, 1, 2, 3))
+awards$imp <- as.factor(awards$imp)
+str(awards)
+```
+
+##### Plot histogram of the target variable 'awards'
+```{r, echo=FALSE}
+hist(awards$awards, main = "Histogram of Awards", xlab = "Number of Awards", col = "lightgreen")
+```
+
+#### Calculate and print mean and variance of awards
+```{r, echo=FALSE}
+mean_awards <- mean(awards$awards)
+variance_awards <- var(awards$awards)
+cat("Mean of Awards: ", mean_awards, "\n")
+cat("Variance of Awards: ", variance_awards, "\n")
+```
+
+#### Boxplots for categorical variables
+```{r, echo=FALSE}
+boxplot(awards ~ gender, data = awards, main = "Awards by Gender", col = "lightgreen")
+boxplot(awards ~ imp, data = awards, main = "Awards by Importance", col = "lightblue")
+boxplot(awards ~ school, data = awards, main = "Awards by School Type", col = "yellow")
+boxplot(awards ~ prog, data = awards, main = "Awards by Program Type", col = "lightgray")
+```
+
+#### Conditional variances and means grouped by categorical variables
+```{r, echo=FALSE}
+grouped_stats <- awards %>%
+  group_by(gender,imp, school, prog) %>%
+  summarise(mean_awards = mean(awards), var_awards = var(awards), .groups = 'drop')
+print(grouped_stats)
+```
+
+
+# Task 2 (50 points): Poisson Regression: Modeling
+##### a. Use the glm() function to perform an intercept-only Poisson regression model with your chosen target variable as the response. Use the output of your model to calculate the mean of your target variable.
+
+##### b. Exclude from full model variables with insignificant coefficients. Show the result. Explain the meanings of coefficients of your model (at least one numeric and one categorical).
+
+##### c. Pick your own new observation and predict the λ. Comment on it.
+
+##### d. Calculate the probability of having more than 15 awards using your predicted λ from Problem 2 c.
+
+##### e.Add to your data a new (created) variable with the problem of unconditional overdispersion.1 Show the problem by computing the average and variance of your variable. (Your variable needs to have a similar meaning to your target variable).
+
+##### f. Run the model with the new variable as a response. Your model must contain only significant coefficients.
+
+##### g. Use the function dispersiontest() to find out overdispersion. Formulate Null and Alternative hypotheses for trafo = Null (mathematically and explain it). Do you have an overdispersion?
+
+##### h. Run the negative binomial and quasi-Poisson model. Show only coefficients. Find the best model based on deviance and AIC. Which is the best model?
+
+# Solution 2
+
+#### Poisson regression with only an intercept
+```{r, echo=FALSE}
+model <- glm(awards ~ 1, family = poisson(link = "log"), data = awards)
+```
+
+#### Summary of the model to see coefficients and statistics
+```{r, echo=FALSE}
+summary(model)
+```
+
+#### Calculate the mean of the target variable from the model intercept
+```{r, echo=FALSE}
+mean_awards <- exp(coef(model)[1])
+mean_awards
+```
+### Fit the full Poisson regression model
+```{r, echo=FALSE}
+full_model <- glm(awards ~ math + physics + hpw + gender + school + prog, 
+                  family = poisson(link = "log"), data = awards)
+```
+
+#### Summary of the full model
+```{r, echo=FALSE}
+summary(full_model)
+```
+
+##### Coefficients Explanation: (Intercept) 0.542328: This is the log of the expected count of awards when all other variables are zero. For categorical variables, this means the reference categories, and for numeric variables, it means zero values. Exponentiating this gives the baseline number of awards under these conditions. math 0.017872: For each one-unit increase in math scores, the log count of awards is expected to increase by 0.017872. In practical terms, the count of awards is expected to multiply by exp(0.017872) for each additional math score point, assuming other variables remain constant. This shows a significant positive effect of math scores on the number of awards. physics 0.011681: Similar to math, each one-point increase in physics scores increases the log count of awards by 0.011681. The number of awards multiplies by exp(0.011681) for each point increase in physics scores, holding other factors constant. This also indicates a significant positive impact. gender -0.324631: If gender1 represents females and males are the reference category, this coefficient suggests that females have a log count of awards that is 0.324631 less than males. The number of awards for females is exp(-0.324631) times those for males, indicating a significant negative effect. school1 0.082635: If school1 represents private schools and public schools are the reference category, then attending a private school is associated with an increase in the log count of awards by 0.082635. This implies that students from private schools are expected to receive exp(0.082635) times more awards than those from public schools, showing a significant positive effect.
+
+#### Fit a refined model excluding insignificant predictors
+```{r, echo=FALSE}
+refined_model <- glm(awards ~math + physics + hpw + gender + school, 
+                     family = poisson(link = "log"), data = awards)
+```
+
+#### Summary of the refined model
+```{r, echo=FALSE}
+summary(refined_model)
+```
+
+### Create a new data frame for the new observation
+```{r, echo=FALSE}
+intercept <- -0.8053
+coeff_prog_academic <- 0
+coeff_math <- 0.0413    
+gender <- "Female"  
+school <- "Privite"
+program <- "Academic"
+math_score <- 71
+```
+
+#### Generate a new variable with negative binomial distribution
+```{r, echo=FALSE}
+prog_academic <- ifelse(program == "Academic", 1, 0)
+log_lambda <- intercept + coeff_prog_academic * prog_academic + coeff_math * math_score
+lambda <- exp(log_lambda)
+print(lambda)
+lambda <- lambda
+prob_more_than_15_awards <- 1 - ppois(15, lambda)
+print(prob_more_than_15_awards)
+set.seed(123)  # for reproducibility
+awards$new_variable <- rnbinom(nrow(awards), mu = mean(awards$awards), size = 1)
+average_new_variable <- mean(awards$new_variable)
+print(average_new_variable)
+variance_new_variable <- var(awards$new_variable)
+print(variance_new_variable)
+```
+
+```{r, echo=FALSE}
+cat("Average of new variable:", average_new_variable, "\n")
+cat("Variance of new variable:", variance_new_variable, "\n")
+```
+
+### Run the model with the new variable as a response.
+```{r, echo=FALSE}
+overdispersion_model <- glm(new_variable ~ math + physics + hpw + gender + school + prog, family = poisson(link = "log"), data = awards)
+summary(overdispersion_model)
+```
+
+#### Model with significant coefficients.
+```{r, echo=FALSE}
+significant_overdispersion_model <- glm(new_variable ~ math + physics + gender + school, family = poisson(link = "log"), data = awards)
+summary(significant_overdispersion_model)
+```
+
+#### Dispersiontest result
+```{r, echo=FALSE}
+dispersiontest(significant_overdispersion_model)
+```
+
+#### z-value (13.678): This is a large value, indicating a significant deviation from the null hypothesis of no overdispersion (dispersion = 1). p-value (< 2.2e-16): This extremely low p-value strongly rejects the null hypothesis, confirming that overdispersion is present in your model.
+
+### Negative-Binomial model
+```{r, echo=FALSE}
+nb_model <- glm.nb(awards ~ hpw + gender + school + prog, data = awards)
+coef(nb_model)
+```
+
+### Quasi-Poission model
+```{r, echo=FALSE}
+quasi_model <- glm(awards ~ gender + school + prog + math, family = quasipoisson(), data = awards)
+coef(quasi_model)
+```
+
+### Negative-Binomial model's Deviance and AIC
+```{r, echo=FALSE}
+nb_deviance <- deviance(nb_model)
+nb_aic <- AIC(nb_model)
+cat("Negative Binomial Model:\n")
+cat("Deviance:", nb_deviance, "\n")
+cat("AIC:", nb_aic, "\n")
+```
+
+### Quasi-Poission model's Deviance and AIC
+```{r, echo=FALSE}
+quasi_deviance <- deviance(quasi_model)
+cat("Quasi-Poisson Model:\n")
+cat("Deviance:", quasi_deviance, "\n")
+```
+
+##### Quasi-Poission model have not AIC
+##### Quasi-Poisson appears to be the best choice given its lower deviance.
+
+
+# Questions (10 points)
+
+##### a.What is the equidispersion in Poisson regression? Why do we need to avoid overdispersion?
+
+##### Equidispersion is a fundamental characteristic of the Poisson distribution, which is often used in Poisson regression models. In the context of these models, equidispersion refers to the condition where the variance of the dependent variable (the count data) is equal to its mean. This assumption is intrinsic to the Poisson distribution, where the single parameter𝜆represents both the mean and the variance. Avoiding overdispersion is crucial for maintaining the accuracy and reliability of statistical models, especially when these models guide decision-making or policy formulation. By ensuring that the model assumptions align with the data characteristics, one can make more reliable and valid statistical inferences.
+
+### b. Why Poisson regression is called log-linear?
+
+##### Because we use a log link to estimate the logarithm of the average value of the dependent variable.
+
